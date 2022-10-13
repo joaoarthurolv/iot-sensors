@@ -5,7 +5,7 @@
 #include <PubSubClient.h>
 
 WiFiClient ESPWiFiClient;
-PubSubClient mqttClient(ESPWiFiClient);
+PubSubClient mqtt_client(ESPWiFiClient);
 
 #define DHTPIN 4
 #define DHTTYPE DHT11   // DHT 11
@@ -17,39 +17,43 @@ PubSubClient mqttClient(ESPWiFiClient);
 #define ADC_Bit_Resolution 12
 #define RatioMQ135CleanAir 3.6
 
+
+#define IO_USERNAME  "joaoarthurolv"
+#define IO_KEY       "aio_YmTT98lT4Sv0I7aVBWGn4qCto5iO"
+
 // Initialize DHT sensor.
 DHT dht(DHTPIN, DHTTYPE);
 
 double CO2 = (0);
 MQUnifiedsensor MQ135(placa, Voltage_Resolution, ADC_Bit_Resolution, pin, type);
 
-const char* mqtt_broker = "[broker.hivemq.com](http://broker.hivemq.com/)";
+const char* mqtt_broker = "io.adafruit.com";
 const int mqtt_port = 1883;
 int mqtt_timeout = 10000;
 
-const char* wifi_ssid = "brisa-1326640";
-const char* wifi_password = "t8ikbrnu";
+const char* wifi_ssid = "Redmi Note 8";
+const char* wifi_password = "danilo123";
 int wifi_timeout = 100000;
 
-//void connectMQTT() {
-//  Serial.print("Reconectando ao MQTT Broker..");
-//
-//  unsigned long startTime = millis();
-//  while (!mqttClient.connected() && (millis() - startTime < mqtt_timeout)) {
-//    Serial.print(".");
-//    String clientId = "client";
-//    clientId += String(random(0xffff), HEX);
-//
-//    if (mqttClient.connect(clientId.c_str())) {
-//      Serial.println();
-//      Serial.print("Conectado ao broker MQTT!");
-//    }
-//
-//    delay(100);
-//
-//  }
-//  Serial.println();
-//}
+void connectMQTT() {
+  unsigned long tempoInicial = millis();
+  while (!mqtt_client.connected() && (millis() - tempoInicial < mqtt_timeout)) {
+    if (WiFi.status() != WL_CONNECTED) {
+      connectWiFi();
+    }
+    Serial.print("Conectando ao MQTT Broker..");
+
+    if (mqtt_client.connect("ESP32Client", IO_USERNAME, IO_KEY)) {
+      Serial.println();
+      Serial.print("Conectado ao broker MQTT!");
+    } else {
+      Serial.println();
+      Serial.print("Conexão com o broker MQTT falhou!");
+      delay(500);
+    }
+  }
+  Serial.println();
+}
 
 void connectWiFi() {
   WiFi.mode(WIFI_STA); //"station mode": permite o ESP32 ser um cliente da rede WiFi
@@ -76,10 +80,10 @@ void setup() {
   Serial.println(F("DHTxx test!"));
 
   connectWiFi();
-
+  
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("Conectando ao broker MQTT ...");
-    mqttClient.setServer(mqtt_broker, mqtt_port);
+    mqtt_client.setServer(mqtt_broker, mqtt_port);
   }
 
   //Set math model to calculate the PPM concentration and the value of constants
@@ -114,9 +118,9 @@ void setup() {
 void loop() {
   // Wait a few seconds between measurements.
   delay(2000);
-  //  if (!mqttClient.connected()) {
-  //    connectMQTT();
-  //  }
+    if (!mqtt_client.connected()) {
+      connectMQTT();
+    }
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
   float h = dht.readHumidity();
@@ -140,11 +144,14 @@ void loop() {
   Serial.print("CO2: ");
   Serial.println(CO2);
 
-  if (mqttClient.connected()) {
-    mqttClient.loop();
-    mqttClient.publish("/imd0902/t01/g3", String(h).c_str(), true);
-    delay(3000);
-    mqttClient.publish("/imd0902/t01/g3", String(t).c_str(), true);
-    delay(3000);
+  if (mqtt_client.connected()) {
+    mqtt_client.publish("joaoarthurolv/feeds/co2", String(CO2).c_str());
+    Serial.println("Publicou o dado: " + String(CO2));
+    mqtt_client.publish("joaoarthurolv/feeds/temperatura", String(t).c_str());
+    Serial.println("Publicou o dado: " + String(t));
+    mqtt_client.publish("joaoarthurolv/feeds/umidade", String(h).c_str());
+    Serial.println("Publicou o dado: " + String(h));
+    delay(10000);
+    mqtt_client.loop();
   }
 }
